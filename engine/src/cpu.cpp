@@ -348,17 +348,19 @@ bool Cpu::step(std::uint32_t instruction, std::string* error) {
         if (funct != 0x08U || (sub_op != 0U && sub_op != 1U &&
                                sub_op != 2U && sub_op != 4U && sub_op != 5U &&
                                sub_op != 6U && sub_op != 8U && sub_op != 9U &&
-                               sub_op != 10U)) return unsupported();
+                               sub_op != 10U && sub_op != 12U &&
+                               sub_op != 14U && sub_op != 16U)) return unsupported();
         const std::uint64_t lhs_low = reg(rs);
         const std::uint64_t lhs_high = reg_high(rs);
         const std::uint64_t rhs_low = reg(rt);
         const std::uint64_t rhs_high = reg_high(rt);
-        const unsigned lane_bits = (sub_op == 8U || sub_op == 9U || sub_op == 10U) ? 8U :
-                                   (sub_op == 4U || sub_op == 5U || sub_op == 6U) ? 16U : 32U;
+        const unsigned lane_bits = (sub_op == 8U || sub_op == 9U || sub_op == 10U || sub_op == 16U) ? 8U :
+                                   (sub_op == 4U || sub_op == 5U || sub_op == 6U || sub_op == 14U) ? 16U : 32U;
         const bool compare_greater = sub_op == 2U || sub_op == 6U || sub_op == 10U;
+        const bool compare_equal = sub_op == 12U || sub_op == 14U || sub_op == 16U;
         const std::uint64_t lane_mask = (std::uint64_t{1} << lane_bits) - 1U;
         const unsigned lane_count = 64U / lane_bits;
-        const auto packed = [sub_op, lane_bits, lane_mask, lane_count, compare_greater](
+        const auto packed = [sub_op, lane_bits, lane_mask, lane_count, compare_greater, compare_equal](
                                 std::uint64_t lhs, std::uint64_t rhs) {
             std::uint64_t result = 0;
             for (unsigned i = 0; i < lane_count; ++i) {
@@ -369,6 +371,8 @@ bool Cpu::step(std::uint32_t instruction, std::string* error) {
                 if (compare_greater) {
                     const std::uint64_t sign_bit = std::uint64_t{1} << (lane_bits - 1U);
                     value = ((a ^ sign_bit) > (b ^ sign_bit)) ? lane_mask : 0U;
+                } else if (compare_equal) {
+                    value = (a == b) ? lane_mask : 0U;
                 } else {
                     value = (sub_op == 0U || sub_op == 4U || sub_op == 8U)
                                 ? (a + b) & lane_mask
